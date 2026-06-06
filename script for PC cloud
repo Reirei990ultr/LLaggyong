@@ -1,8 +1,8 @@
 --[[
 Script to run auto farm or anti-AFK faster for PC in the cloud, Joyark auto farm.
 ]]
--- antiafk
-if not _G.Run then return end
+
+if _G.Run then return end
 _G.Run = true
 
 local VirtualUser = game:GetService("VirtualUser")
@@ -12,3 +12,164 @@ Player.Idled:Connect(function()
     VirtualUser:CaptureController()
     VirtualUser:ClickButton2(Vector2.new())
 end)
+
+local function RunFtap()
+    local Players = game:GetService("Players")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Workspace = game:GetService("Workspace")
+    local LocalPlayer = Players.LocalPlayer
+    local SetNetworkOwner = ReplicatedStorage:WaitForChild("GrabEvents"):WaitForChild("SetNetworkOwner")
+
+    _G.TP_Priority = _G.TP_Priority or 0
+    _G.AutoFarmCoins = false
+
+    local function lookAt(from, to)
+        local dir = (to - from).Unit
+        local right = dir:Cross(Vector3.new(0, 1, 0))
+        local up = right:Cross(dir)
+        return CFrame.fromMatrix(from, right, up)
+    end
+
+    local function GetPlayerCharacter()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            return LocalPlayer.Character
+        end
+    end
+
+    local function ChangeActivityPriority(priority)
+        if _G.TP_Priority <= priority then
+            _G.TP_Priority = priority
+            return true
+        end
+        if priority == 0 then
+            _G.TP_Priority = priority
+            return true
+        end
+    end
+
+    local function TeleportPlayer(cf, priority)
+        if (priority == nil and 0 or priority) == _G.TP_Priority then
+            local char = GetPlayerCharacter()
+            if char and typeof(cf) == "CFrame" then
+                local hrp = char.HumanoidRootPart
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                hrp.CFrame = hrp.CFrame.Rotation + cf.Position
+                if hum.SeatPart == nil or tostring(hum.SeatPart.Parent) ~= "CreatureBlobman" then
+                    hum.Sit = false
+                end
+            end
+        end
+    end
+
+    local function SNOWship(part)
+        if part and typeof(part) == "Instance" then
+            local dist = LocalPlayer:DistanceFromCharacter(part.Position)
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and dist <= 30 then
+                SetNetworkOwner:FireServer(part, lookAt(LocalPlayer.Character.HumanoidRootPart.Position, part.Position))
+            end
+        end
+    end
+
+    local function IsSlotsReady()
+        local ready = nil
+        for _, slot in pairs(Workspace.Slots:GetChildren()) do
+            if slot.SlotHandle.LightBall.Material ~= Enum.Material.Neon then
+                ready = false
+                break
+            end
+            ready = true
+        end
+        return ready
+    end
+
+    local function SaveSpinPosition()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            _G.SavedPositionInSpin = LocalPlayer.Character.HumanoidRootPart.CFrame
+        end
+    end
+
+    local function RestoreSpinPosition()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character.HumanoidRootPart.CFrame = _G.SavedPositionInSpin
+        end
+    end
+
+    _G.AutoFarmCoins = true
+    while _G.AutoFarmCoins do
+        if IsSlotsReady() and ChangeActivityPriority(5) then
+            SaveSpinPosition()
+            local currentSlot = nil
+            local moveThread = task.spawn(function()
+                while true do
+                    if currentSlot then
+                        TeleportPlayer(currentSlot.CFrame + Vector3.new(0, 5, 0), 5)
+                        task.wait(0.2)
+                        SNOWship(currentSlot)
+                    end
+                    task.wait()
+                end
+            end)
+            for _, slot in pairs(Workspace.Slots:GetChildren()) do
+                currentSlot = slot.SlotHandle.Handle
+                currentSlot.CanCollide = false
+                local saved = currentSlot
+                for _ = 1, 5 do
+                    task.wait(0.2)
+                end
+                saved.CanCollide = true
+                if not IsSlotsReady() then break end
+            end
+            task.cancel(moveThread)
+            ChangeActivityPriority(0)
+            RestoreSpinPosition()
+        end
+        task.wait(5)
+    end
+end
+
+local scripts = {
+    Bloxfruit = {url = "https://rawscripts.net/raw/Universal-Script-Redz-hub-205954", placeId = 2753915549},
+    ["99Night"] = {unavailable = true},
+    DeathBall = {unavailable = true},
+    Ftap = {func = RunFtap, placeId = 6961824067},
+}
+
+function loadScript(name)
+    local entry
+
+    if name then
+        entry = scripts[name]
+        if not entry then
+            warn("Script not found for: " .. tostring(name))
+            return
+        end
+    else
+        for n, e in pairs(scripts) do
+            if not e.unavailable and e.placeId and game.PlaceId == e.placeId then
+                entry = e
+                name = n
+                break
+            end
+        end
+        if not entry then
+            warn("No script available for this game. PlaceId: " .. tostring(game.PlaceId))
+            return
+        end
+    end
+
+    if entry.unavailable then
+        warn(tostring(name) .. " is temporarily unavailable.")
+        return
+    end
+    if entry.placeId and game.PlaceId ~= entry.placeId then
+        warn(tostring(name) .. ": Wrong game.")
+        return
+    end
+    if entry.func then
+        task.spawn(entry.func)
+    elseif entry.url then
+        loadstring(game:HttpGet(entry.url))()
+    end
+end
+
+loadScript()
